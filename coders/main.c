@@ -6,7 +6,7 @@
 /*   By: obahya <obahya@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 02:36:45 by obahya            #+#    #+#             */
-/*   Updated: 2026/02/26 05:00:17 by obahya           ###   ########.fr       */
+/*   Updated: 2026/02/26 21:17:33 by obahya           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -21,6 +21,10 @@ void *monitor_routine(void *arg)
     int i;
     int all_compiled;
 
+    pthread_mutex_lock(&sim->state_mutex);
+    while (sim->threads_ready == 0)
+        pthread_cond_wait(&sim->start_cond, &sim->state_mutex);
+    pthread_mutex_unlock(&sim->state_mutex);
     while (1)
     {
         i = 0;
@@ -32,23 +36,14 @@ void *monitor_routine(void *arg)
             if ((get_current_time_ms() - sim->coders[i].last_compile_start) >= sim->time_to_burnout)
             {
                 sim->is_active = 0; // Stop the simulation
+                pthread_cond_broadcast(&sim->arbiter_cond);
                 pthread_mutex_unlock(&sim->state_mutex);
                 print_action(&sim->coders[i], "burned out");
-				i = 0;
-				while (i < sim->num_coders)
-				{
-					pthread_mutex_lock(&sim->dongles[i].mutex);
-					pthread_cond_broadcast(&sim->dongles[i].cond);
-					pthread_mutex_unlock(&sim->dongles[i].mutex);
-					i++;
-				}
                 return (NULL);
             }
 
             if (sim->required_compiles == -1 || sim->coders[i].compiles_done < sim->required_compiles)
-            {
                 all_compiled = 0;
-            }
             
             pthread_mutex_unlock(&sim->state_mutex);
             i++;
@@ -58,15 +53,8 @@ void *monitor_routine(void *arg)
         {
             pthread_mutex_lock(&sim->state_mutex);
             sim->is_active = 0;
+            pthread_cond_broadcast(&sim->arbiter_cond);
             pthread_mutex_unlock(&sim->state_mutex);
-			i = 0;
-			while (i < sim->num_coders)
-			{
-				pthread_mutex_lock(&sim->dongles[i].mutex);
-				pthread_cond_broadcast(&sim->dongles[i].cond);
-				pthread_mutex_unlock(&sim->dongles[i].mutex);
-				i++;
-			}
             return (NULL);
         }
         usleep(1000); 
@@ -126,18 +114,16 @@ void cleanup_simulation(t_sim *sim)
     {
         // Destroy the mutex and condition variable for each dongle
         pthread_mutex_destroy(&sim->dongles[i].mutex);
-        pthread_cond_destroy(&sim->dongles[i].cond);
-        
-        // If the priority queue isn't empty (due to an early exit), free the nodes
-        while (sim->dongles[i].queue != NULL)
-        {
-            t_node *leaked_node = dequeue(&sim->dongles[i]);
-            free(leaked_node);
-        }
         i++;
     }
-    
+    while (sim->queue != NULL)
+    {
+        t_node *leaked_node = (t_node *)sim->queue;
+        remove_node(sim, leaked_node);
+        free(leaked_node);
+    } 
     // Destroy the global mutexes
+    pthread_cond_destroy(&sim->arbiter_cond);
     pthread_cond_destroy(&sim->start_cond);
     pthread_mutex_destroy(&sim->state_mutex);
     pthread_mutex_destroy(&sim->write_mutex);

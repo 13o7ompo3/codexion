@@ -6,7 +6,7 @@
 /*   By: obahya <obahya@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 02:39:16 by obahya            #+#    #+#             */
-/*   Updated: 2026/02/26 04:55:01 by obahya           ###   ########.fr       */
+/*   Updated: 2026/02/26 21:17:48 by obahya           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -22,10 +22,8 @@
 
 typedef struct s_dongle {
 	pthread_mutex_t	mutex;
-	pthread_cond_t	cond;
 	long long		available_at;
 	int				is_held;
-	void			*queue;
 }					t_dongle;
 
 typedef struct s_coder {
@@ -50,6 +48,8 @@ typedef struct s_sim {
 	int				scheduler_type;
 	int				is_active;
 	int				threads_ready;
+	void			*queue;
+	pthread_cond_t	arbiter_cond;
 	pthread_cond_t	start_cond;
 	pthread_mutex_t	state_mutex;
 	pthread_mutex_t	write_mutex;
@@ -67,9 +67,12 @@ typedef struct s_node {
 int	parse_args(int argc, char **argv, t_sim *sim);
 void	*coder_routine(void *arg);
 void	*monitor_routine(void *arg);
-t_node	*dequeue(t_dongle *dongle);
-void	enqueue(t_dongle *dongle, t_node *new_node, int scheduler_type);
+// t_node	*dequeue(t_dongle *dongle);
+// void	enqueue(t_dongle *dongle, t_node *new_node, int scheduler_type);
 void	print_action(t_coder *coder, char *action);
 long long	get_current_time_ms(void);
+int	take_both_dongles(t_coder *coder);
+void	release_both_dongles(t_coder *coder);
+void remove_node(t_sim *sim, t_node *node);
 
 #endif
