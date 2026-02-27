@@ -4,15 +4,14 @@ CC			= cc
 CFLAGS		= -Wall -Wextra -Werror -pthread
 RM			= rm -f
 
-SRCS		= main.c \
-				parse.c \
-				init.c \
-				routine.c \
-				arbiter.c \
-				utils.c
+SRCS		= coders/main.c \
+				coders/parser.c \
+				coders/utils.c \
+				coders/queue.c \
+				coders/coder.c 
 
 OBJS		= $(SRCS:.c=.o)
-HEADER		= codexion.h
+HEADER		= coders/codexion.h
 
 all: $(NAME)
 
