@@ -68,7 +68,7 @@ To run a simulation with 3 coders, a 300ms burnout limit, 100ms debug time, 100m
 This project relies heavily on low-level operating system concepts and algorithmic theory.  Below are the foundational concepts and documentation referenced during development:
 - The Dining Philosophers Problem: Edsger W. Dijkstra's original concurrency problem, which serves as the theoretical foundation for this project's resource-sharing challenge.
 - POSIX Threads (pthread) Documentation: Linux manual pages for `pthread_create`, `pthread_join`, `pthread_mutex_lock`, `pthread_mutex_init`, `pthread_cond_init`, `pthread_cond_wait`, and `pthread_cond_broadcast`.
-- Youtube play list explaining Threads: [link](www.youtube.com/playlist?list=PLfqABt5AS4FmuQf70psXrsMLEDQXNkLq2)
+- Youtube play list explaining Threads: [Playlist](https://www.youtube.com/playlist?list=PLfqABt5AS4FmuQf70psXrsMLEDQXNkLq2)
 
 **AI Usage Declaration**
 - **Debugging Hardware-Level Concurrency**: Identifying and explaining deep OS-level phenomena such as "Thread Creation Lag" and "Deadlock by Silence," and providing the theoretical solutions.
