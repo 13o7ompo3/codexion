@@ -68,6 +68,7 @@ int	parse_args(int argc, char **argv, t_sim *sim);
 void	*coder_routine(void *arg);
 void	*monitor_routine(void *arg);
 void	print_action(t_coder *coder, char *action);
+void	print_compiling_sequence(t_coder *coder);
 long long	get_current_time_ms(void);
 int	take_both_dongles(t_coder *coder);
 void	release_both_dongles(t_coder *coder);

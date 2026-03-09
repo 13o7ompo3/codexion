@@ -23,84 +23,120 @@ void	precise_sleep(long long time_in_ms, t_sim *sim)
 	}
 }
 
+static long long	get_deadline(t_coder *coder)
+{
+	return coder->last_compile_start + coder->sim->time_to_burnout;
+}
+
+static int cleanup_and_abort(t_sim *sim, t_node *node)
+{
+	remove_node(sim, node);
+	free(node);
+	pthread_mutex_unlock(&sim->state_mutex);
+	return (1);
+}
+
+static int finish_take_dongles(t_coder *coder, t_node *node)
+{
+	remove_node(coder->sim, node);
+	free(node);
+	pthread_mutex_unlock(&coder->sim->state_mutex);
+	return (0);
+}
+
+static void handle_cooldown_sleep(t_sim *sim)
+{
+	pthread_mutex_unlock(&sim->state_mutex);
+	usleep(500);
+	pthread_mutex_lock(&sim->state_mutex);
+}
+
+static int check_conflict(t_coder *coder, t_node *my_node)
+{
+	t_node      *curr;
+	long long   my_dl;
+	long long   curr_dl;
+
+	curr = (t_node *)coder->sim->queue;
+	my_dl = get_deadline(coder);
+	while (curr && curr != my_node)
+	{
+		if (curr->coder->left_dongle == coder->left_dongle || 
+			curr->coder->left_dongle == coder->right_dongle ||
+			curr->coder->right_dongle == coder->left_dongle ||
+			curr->coder->right_dongle == coder->right_dongle)
+		{
+			curr_dl = get_deadline(curr->coder);
+			if (curr_dl < my_dl || (curr_dl == my_dl && 
+				curr->coder->compiles_done < coder->compiles_done))
+				return (1);
+		}
+		curr = curr->next;
+	}
+	return (0);
+}
+
+static int try_grab_dongles(t_coder *coder)
+{
+	t_dongle    *first;
+	t_dongle    *second;
+	long long   now;
+
+	first = coder->left_dongle < coder->right_dongle ? 
+			coder->left_dongle : coder->right_dongle;
+	second = coder->left_dongle < coder->right_dongle ? 
+			coder->right_dongle : coder->left_dongle;
+	pthread_mutex_lock(&first->mutex);
+	pthread_mutex_lock(&second->mutex);
+	if (!first->is_held && !second->is_held)
+	{
+		now = get_current_time_ms();
+		if (now >= first->available_at && now >= second->available_at)
+		{
+			first->is_held = 1;
+			second->is_held = 1;
+			pthread_mutex_unlock(&second->mutex);
+			pthread_mutex_unlock(&first->mutex);
+			return (0);
+		}
+		pthread_mutex_unlock(&second->mutex);
+		pthread_mutex_unlock(&first->mutex);
+		return (1);
+	}
+	pthread_mutex_unlock(&second->mutex);
+	pthread_mutex_unlock(&first->mutex);
+	return (2);
+}
+
 int	take_both_dongles(t_coder *coder)
 {
-	t_node *my_node = malloc(sizeof(t_node));
-	if (!my_node) return (1);
-	my_node->coder = coder;
+	t_node  *n;
+	int     st;
+
+	n = malloc(sizeof(t_node));
+	if (!n)
+		return (1);
+	n->coder = coder;
 	pthread_mutex_lock(&coder->sim->state_mutex);
-	enqueue(coder->sim, my_node, coder->sim->scheduler_type);
+	enqueue(coder->sim, n, coder->sim->scheduler_type);
 	while (1)
 	{
 		if (!coder->sim->is_active)
+			return (cleanup_and_abort(coder->sim, n));
+		if (!check_conflict(coder, n))
 		{
-			remove_node(coder->sim, my_node);
-			free(my_node);
-			pthread_mutex_unlock(&coder->sim->state_mutex);
-			return (1);
-		}
-		int conflict = 0;
-		t_node *curr = (t_node *)coder->sim->queue;
-		if (curr)
-		{
-			while (curr != my_node)
+			st = try_grab_dongles(coder);
+			if (st == 0)
+				break ;
+			if (st == 1)
 			{
-				if (curr->coder->left_dongle == coder->left_dongle || 
-					curr->coder->left_dongle == coder->right_dongle ||
-					curr->coder->right_dongle == coder->left_dongle ||
-					curr->coder->right_dongle == coder->right_dongle)
-				{
-					conflict = 1;
-					break;
-				}
-				curr = curr->next;
+				handle_cooldown_sleep(coder->sim);
+				continue ;
 			}
 		}
-		int on_cooldown = 0;
-		if (!conflict)
-		{
-			t_dongle *first = coder->left_dongle < coder->right_dongle ? coder->left_dongle : coder->right_dongle;
-			t_dongle *second = coder->left_dongle < coder->right_dongle ? coder->right_dongle : coder->left_dongle;
-			
-			pthread_mutex_lock(&first->mutex);
-			pthread_mutex_lock(&second->mutex);
-			
-			if (!first->is_held && !second->is_held)
-			{
-				if (get_current_time_ms() >= first->available_at &&
-					get_current_time_ms() >= second->available_at)
-				{
-					first->is_held = 1;
-					second->is_held = 1;
-					pthread_mutex_unlock(&second->mutex);
-					pthread_mutex_unlock(&first->mutex);
-					break; 
-				}
-				else
-					on_cooldown = 1; 
-
-			}
-			pthread_mutex_unlock(&second->mutex);
-			pthread_mutex_unlock(&first->mutex);
-		}
-		if (on_cooldown)
-		{
-			pthread_mutex_unlock(&coder->sim->state_mutex);
-			usleep(500);
-			pthread_mutex_lock(&coder->sim->state_mutex);
-		}
-		else
-			pthread_cond_wait(&coder->sim->arbiter_cond, &coder->sim->state_mutex);
+		pthread_cond_wait(&coder->sim->arbiter_cond, &coder->sim->state_mutex);
 	}
-	remove_node(coder->sim, my_node);
-	free(my_node);
-	
-	long long current_time = get_current_time_ms() - coder->sim->start_time;
-	printf("%lld %d has taken a dongle\n", current_time, coder->id);
-	printf("%lld %d has taken a dongle\n", current_time, coder->id);
-	
-	pthread_mutex_unlock(&coder->sim->state_mutex);
-	return (0);
+	return (finish_take_dongles(coder, n));
 }
 
 void release_both_dongles(t_coder *coder)
@@ -161,10 +197,12 @@ void	*coder_routine(void *arg)
 		coder->compiles_done++;
 		pthread_mutex_unlock(&sim->state_mutex);
 
-		print_action(coder, "is compiling");
+		print_compiling_sequence(coder);
 		precise_sleep(sim->time_to_compile, sim);
 
 		release_both_dongles(coder);
+		if (coder->compiles_done == coder->sim->required_compiles)
+			break;
 
 		print_action(coder, "is debugging");
 		precise_sleep(sim->time_to_debug, sim);

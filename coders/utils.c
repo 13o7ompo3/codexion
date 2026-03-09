@@ -31,3 +31,22 @@ void	print_action(t_coder *coder, char *action)
 	pthread_mutex_unlock(&coder->sim->state_mutex);
 	pthread_mutex_unlock(&coder->sim->write_mutex);
 }
+
+void print_compiling_sequence(t_coder *coder)
+{
+	long long current_time;
+
+	pthread_mutex_lock(&coder->sim->write_mutex);
+	pthread_mutex_lock(&coder->sim->state_mutex);
+	
+	if (coder->sim->is_active)
+	{
+		current_time = get_current_time_ms() - coder->sim->start_time;
+		printf("%lld %d has taken a dongle\n", current_time, coder->id);
+		printf("%lld %d has taken a dongle\n", current_time, coder->id);
+		printf("%lld %d is compiling\n", current_time, coder->id);
+	}
+	
+	pthread_mutex_unlock(&coder->sim->state_mutex);
+	pthread_mutex_unlock(&coder->sim->write_mutex);
+}
