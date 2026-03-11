@@ -34,7 +34,7 @@ void *monitor_routine(void *arg)
 			if ((get_current_time_ms() - sim->coders[i].last_compile_start) > sim->time_to_burnout)
 			{
 				sim->is_active = 0;
-				pthread_cond_broadcast(&sim->arbiter_cond);
+				wake_up_coders(sim);
 				pthread_mutex_unlock(&sim->state_mutex);
 				print_action(&sim->coders[i], "burned out");
 				return (NULL);
@@ -49,7 +49,7 @@ void *monitor_routine(void *arg)
 		{
 			pthread_mutex_lock(&sim->state_mutex);
 			sim->is_active = 0;
-			pthread_cond_broadcast(&sim->arbiter_cond);
+			wake_up_coders(sim);
 			pthread_mutex_unlock(&sim->state_mutex);
 			return (NULL);
 		}
@@ -97,15 +97,9 @@ void cleanup_simulation(t_sim *sim)
 	while (i < sim->num_coders)
 	{
 		pthread_mutex_destroy(&sim->dongles[i].mutex);
+		pthread_cond_destroy(&sim->coders[i].wakeup_cond);
 		i++;
 	}
-	while (sim->queue != NULL)
-	{
-		t_node *leaked_node = (t_node *)sim->queue;
-		remove_node(sim, leaked_node);
-		free(leaked_node);
-	} 
-	pthread_cond_destroy(&sim->arbiter_cond);
 	pthread_cond_destroy(&sim->start_cond);
 	pthread_mutex_destroy(&sim->state_mutex);
 	pthread_mutex_destroy(&sim->write_mutex);

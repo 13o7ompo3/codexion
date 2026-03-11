@@ -5,61 +5,62 @@ long long get_deadline(t_coder *coder)
 	return (coder->last_compile_start + coder->sim->time_to_burnout);
 }
 
-void enqueue(t_sim *dongle, t_node *new_node, int scheduler_type)
+void enqueue(t_sim *sim, t_coder *new_coder, int scheduler_type)
 {
-	t_node *curr;
+	t_coder		*curr;
 	long long	d_new;
 	long long	d_curr;
 
-	if (!dongle->queue)
+	if (!sim->queue)
 	{
-		dongle->queue = new_node;
-		new_node->next = new_node;
-		new_node->prev = new_node;
+		sim->queue = new_coder;
+		new_coder->next = new_coder;
+		new_coder->prev = new_coder;
 		return ;
 	}
-	curr = (t_node *)dongle->queue;
+	curr = sim->queue;
 	if (scheduler_type == 1)
 	{
-			d_new = get_deadline(new_node->coder);
+			d_new = get_deadline(new_coder);
 			do {
-				d_curr = get_deadline(curr->coder);
+				d_curr = get_deadline(curr);
 
 				if (d_new < d_curr)
 					break ;
 
-				if (d_new == d_curr && new_node->coder->compiles_done < curr->coder->compiles_done)
+				if (d_new == d_curr && new_coder->compiles_done < curr->compiles_done)
 					break ;
 					
 				curr = curr->next;
-			} while (curr != (t_node *)dongle->queue);
+			} while (curr != sim->queue);
 		}
-		new_node->next = curr;
-		new_node->prev = curr->prev;
-		curr->prev->next = new_node;
-		curr->prev = new_node;
-		if (scheduler_type == 1 && curr == (t_node *)dongle->queue)
+		new_coder->next = curr;
+		new_coder->prev = curr->prev;
+		curr->prev->next = new_coder;
+		curr->prev = new_coder;
+		if (scheduler_type == 1 && curr == sim->queue)
 		{
-			d_curr = get_deadline(curr->coder);
-			if (d_new < d_curr || (d_new == d_curr && new_node->coder->compiles_done < curr->coder->compiles_done))
-				dongle->queue = new_node;
+			d_new = get_deadline(new_coder);
+			d_curr = get_deadline(curr);
+			if (d_new < d_curr || (d_new == d_curr && new_coder->compiles_done < curr->compiles_done))
+				sim->queue = new_coder;
 		}
 	}
 
-void	remove_node(t_sim *sim, t_node *node)
+void	remove_coder(t_sim *sim, t_coder *coder)
 {
-	if (node->next == node)
-	{
+	if (!coder->next || !coder->prev)
+		return;
+	if (coder->next == coder)
 		sim->queue = NULL;
-	}
 	else
 	{
-		node->prev->next = node->next;
-		node->next->prev = node->prev;
-		if (sim->queue == node)
-			sim->queue = node->next;
+		coder->prev->next = coder->next;
+		coder->next->prev = coder->prev;
+		if (sim->queue == coder)
+			sim->queue = coder->next;
 	}
-	node->next = NULL;
-	node->prev = NULL;
+	coder->next = NULL;
+	coder->prev = NULL;
 }
 

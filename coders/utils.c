@@ -50,3 +50,15 @@ void print_compiling_sequence(t_coder *coder)
 	pthread_mutex_unlock(&coder->sim->state_mutex);
 	pthread_mutex_unlock(&coder->sim->write_mutex);
 }
+
+void	wake_up_coders(t_sim *sim)
+{
+	int	i;
+
+	i = 0;
+	while (i < sim->num_coders)
+	{
+		pthread_cond_signal(&sim->coders[i].wakeup_cond);
+		i++;
+	}
+}

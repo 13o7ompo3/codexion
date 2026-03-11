@@ -33,7 +33,10 @@ typedef struct s_coder {
 	int				compiles_done;
 	t_dongle		*left_dongle;
 	t_dongle		*right_dongle;
+	struct s_coder	*next;
+	struct s_coder	*prev;
 	struct s_sim	*sim;
+	pthread_cond_t	wakeup_cond;
 }					t_coder;
 
 typedef struct s_sim {
@@ -48,8 +51,7 @@ typedef struct s_sim {
 	int				scheduler_type;
 	int				is_active;
 	int				threads_ready;
-	void			*queue;
-	pthread_cond_t	arbiter_cond;
+	t_coder			*queue;
 	pthread_cond_t	start_cond;
 	pthread_mutex_t	state_mutex;
 	pthread_mutex_t	write_mutex;
@@ -58,11 +60,6 @@ typedef struct s_sim {
 	t_coder			*coders;
 }					t_sim;
 
-typedef struct s_node {
-	t_coder			*coder;
-	struct s_node	*next;
-	struct s_node	*prev;
-}					t_node;
 
 int	parse_args(int argc, char **argv, t_sim *sim);
 void	*coder_routine(void *arg);
@@ -72,7 +69,9 @@ void	print_compiling_sequence(t_coder *coder);
 long long	get_current_time_ms(void);
 int	take_both_dongles(t_coder *coder);
 void	release_both_dongles(t_coder *coder);
-void	remove_node(t_sim *sim, t_node *node);
-void	enqueue(t_sim *dongle, t_node *new_node, int scheduler_type);
+void	remove_coder(t_sim *sim, t_coder *coder);
+void	enqueue(t_sim *dongle, t_coder *new_coder, int scheduler_type);
+void	wake_up_coders(t_sim *sim);
+long long	get_deadline(t_coder *coder);
 
 #endif

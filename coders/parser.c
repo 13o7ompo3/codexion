@@ -14,6 +14,9 @@ int	init_simulation(t_sim *sim)
 	while (i < sim->num_coders)
 	{
 		pthread_mutex_init(&sim->dongles[i].mutex, NULL);
+		pthread_cond_init(&sim->coders[i].wakeup_cond, NULL);
+		sim->coders[i].next = NULL;
+		sim->coders[i].prev = NULL;
 		sim->dongles[i].available_at = 0;
 		sim->coders[i].id = i + 1;
 		sim->coders[i].compiles_done = 0;
@@ -73,7 +76,6 @@ int	parse_args(int argc, char **argv, t_sim *sim)
 	sim->is_active = 1;
 	sim->threads_ready = 0;
 	sim->queue = NULL;
-	pthread_cond_init(&sim->arbiter_cond, NULL);
 	pthread_cond_init(&sim->start_cond, NULL);
 	pthread_mutex_init(&sim->state_mutex, NULL);
 	pthread_mutex_init(&sim->write_mutex, NULL);
