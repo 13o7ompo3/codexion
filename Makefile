@@ -7,7 +7,7 @@ RM			= rm -f
 SRCS		= coders/main.c \
 				coders/parser.c \
 				coders/utils.c \
-				coders/queue.c \
+				coders/arbiter.c \
 				coders/coder.c 
 
 OBJS		= $(SRCS:.c=.o)

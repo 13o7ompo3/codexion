@@ -10,6 +10,7 @@ void enqueue(t_sim *sim, t_coder *new_coder, int scheduler_type)
 	t_coder		*curr;
 	long long	d_new;
 	long long	d_curr;
+	long long	diff;
 
 	if (!sim->queue)
 	{
@@ -24,11 +25,13 @@ void enqueue(t_sim *sim, t_coder *new_coder, int scheduler_type)
 			d_new = get_deadline(new_coder);
 			do {
 				d_curr = get_deadline(curr);
-
-				if (d_new < d_curr)
+				diff = d_new - d_curr;
+				if (diff < 0)
+					diff = -diff;
+				if (diff > 50 && d_new < d_curr)
 					break ;
 
-				if (d_new == d_curr && new_coder->compiles_done < curr->compiles_done)
+				if (diff <= 50 && new_coder->compiles_done < curr->compiles_done)
 					break ;
 					
 				curr = curr->next;
@@ -42,7 +45,10 @@ void enqueue(t_sim *sim, t_coder *new_coder, int scheduler_type)
 		{
 			d_new = get_deadline(new_coder);
 			d_curr = get_deadline(curr);
-			if (d_new < d_curr || (d_new == d_curr && new_coder->compiles_done < curr->compiles_done))
+			diff = d_new - d_curr;
+			if (diff < 0)
+				diff = -diff;
+			if (diff > 50 || (diff <= 50 && new_coder->compiles_done < curr->compiles_done))
 				sim->queue = new_coder;
 		}
 	}

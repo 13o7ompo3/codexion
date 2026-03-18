@@ -62,3 +62,30 @@ void	wake_up_coders(t_sim *sim)
 		i++;
 	}
 }
+
+void	precise_sleep(long long time_in_ms, t_sim *sim)
+{
+	long long start_time;
+	long long current_time;
+
+	start_time = get_current_time_ms();
+	while (1)
+	{
+		pthread_mutex_lock(&sim->state_mutex);
+		if (!sim->is_active)
+		{
+			pthread_mutex_unlock(&sim->state_mutex);
+			break ;
+		}
+		pthread_mutex_unlock(&sim->state_mutex);
+
+		current_time = get_current_time_ms();
+		if ((current_time - start_time) >= time_in_ms)
+			break ;
+	}
+}
+
+long long get_deadline(t_coder *coder)
+{
+	return (coder->last_compile_start + coder->sim->time_to_burnout);
+}

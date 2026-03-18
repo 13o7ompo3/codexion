@@ -19,6 +19,9 @@
 # include <string.h>
 # include <unistd.h>
 
+# define THINKING 0
+# define HUNGRY 1
+# define COMPILING 2
 
 typedef struct s_dongle {
 	pthread_mutex_t	mutex;
@@ -28,36 +31,40 @@ typedef struct s_dongle {
 
 typedef struct s_coder {
 	int				id;
-	pthread_t		thread_id;
-	long long		last_compile_start;
 	int				compiles_done;
-	t_dongle		*left_dongle;
-	t_dongle		*right_dongle;
-	struct s_coder	*next;
-	struct s_coder	*prev;
-	struct s_sim	*sim;
+	int				is_finished;
+	long long		last_compile_start;
+
+	struct s_dongle	*left_dongle;
+	struct s_dongle	*right_dongle;
+
+	int				state;
 	pthread_cond_t	wakeup_cond;
+	pthread_t		thread_id;
+	
+	struct s_sim    *sim;
 }					t_coder;
 
 typedef struct s_sim {
 	int				num_coders;
-	long long		start_time;
-	long long		time_to_burnout;
-	long long		time_to_compile;
-	long long		time_to_debug;
-	long long		time_to_refactor;
+	int				time_to_burnout;
+	int				time_to_compile;
+	int				time_to_debug;
+	int				time_to_refactor;
 	int				required_compiles;
-	long long		dongle_cooldown;
+	int				dongle_cooldown;
 	int				scheduler_type;
+
 	int				is_active;
 	int				threads_ready;
-	t_coder			*queue;
-	pthread_cond_t	start_cond;
+	long long		start_time;
+
+	t_coder			*coders;
+	struct s_dongle	*dongles;
+
 	pthread_mutex_t	state_mutex;
 	pthread_mutex_t	write_mutex;
-
-	t_dongle		*dongles;
-	t_coder			*coders;
+	pthread_cond_t	start_cond;
 }					t_sim;
 
 
@@ -73,5 +80,6 @@ void	remove_coder(t_sim *sim, t_coder *coder);
 void	enqueue(t_sim *dongle, t_coder *new_coder, int scheduler_type);
 void	wake_up_coders(t_sim *sim);
 long long	get_deadline(t_coder *coder);
+void	precise_sleep(long long time_in_ms, t_sim *sim);
 
 #endif

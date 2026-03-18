@@ -31,7 +31,7 @@ void *monitor_routine(void *arg)
 		while (i < sim->num_coders)
 		{
 			pthread_mutex_lock(&sim->state_mutex);
-			if ((get_current_time_ms() - sim->coders[i].last_compile_start) > sim->time_to_burnout)
+			if (!sim->coders[i].is_finished && ((get_current_time_ms() - sim->coders[i].last_compile_start) > sim->time_to_burnout))
 			{
 				sim->is_active = 0;
 				wake_up_coders(sim);
@@ -39,7 +39,7 @@ void *monitor_routine(void *arg)
 				print_action(&sim->coders[i], "burned out");
 				return (NULL);
 			}
-			if (sim->required_compiles == -1 || sim->coders[i].compiles_done < sim->required_compiles)
+			if (sim->required_compiles == -1 || !sim->coders[i].is_finished)
 				all_compiled = 0;
 			
 			pthread_mutex_unlock(&sim->state_mutex);
@@ -65,11 +65,38 @@ int start_simulation(t_sim *sim)
 	while (i < sim->num_coders)
 	{
 		if (pthread_create(&sim->coders[i].thread_id, NULL, &coder_routine, &sim->coders[i]) != 0)
-			return (1);
+		{
+			pthread_mutex_lock(&sim->state_mutex);
+			sim->is_active = 0;
+			sim->threads_ready = 1;
+			pthread_cond_broadcast(&sim->start_cond);
+			pthread_mutex_unlock(&sim->state_mutex);
+
+			int j = 0;
+			while (j < i)
+			{
+				pthread_join(sim->coders[j].thread_id, NULL);
+				j++;
+			}
+			return (1); 
+		}
 		i++;
 	}
 	if (pthread_create(&monitor_thread, NULL, &monitor_routine, sim) != 0)
+	{
+		pthread_mutex_lock(&sim->state_mutex);
+		sim->is_active = 0;
+		sim->threads_ready = 1;
+		pthread_cond_broadcast(&sim->start_cond);
+		pthread_mutex_unlock(&sim->state_mutex);
+		i = 0;
+		while (i < sim->num_coders)
+		{
+			sim->coders[i].last_compile_start = sim->start_time;
+			i++;
+		}
 		return (1);
+	}
 	pthread_mutex_lock(&sim->state_mutex);
 	sim->start_time = get_current_time_ms();
 	i = 0;
