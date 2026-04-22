@@ -6,23 +6,32 @@ int	init_simulation(t_sim *sim)
 {
 	int	i;
 
-	sim->dongles = malloc(sizeof(t_dongle) * sim->num_coders);
-	sim->coders = malloc(sizeof(t_coder) * sim->num_coders);
-	if (!sim->dongles || !sim->coders)
+	sim->dongles = calloc(sim->num_coders, sizeof(t_dongle));
+	sim->coders = calloc(sim->num_coders, sizeof(t_coder));
+	sim->queue = init_heap(sim->num_coders, sim->scheduler_type);
+	sim->sleep_heap = init_heap(sim->num_coders, 1337);
+	if (!sim->dongles || !sim->coders || !sim->queue || !sim->sleep_heap)
 		return (1);
+	pthread_mutex_init(&sim->queue_mutex, NULL);
+	pthread_cond_init(&sim->waiter_cond, NULL);
+	pthread_mutex_init(&sim->sleep_mutex, NULL);
+	pthread_cond_init(&sim->sleep_room_cond, NULL);
 	i = 0;
 	while (i < sim->num_coders)
 	{
-		pthread_mutex_init(&sim->dongles[i].mutex, NULL);
+		pthread_mutex_init(&sim->coders[i].coder_mutex, NULL);
 		pthread_cond_init(&sim->coders[i].wakeup_cond, NULL);
-		sim->coders[i].next = NULL;
-		sim->coders[i].prev = NULL;
+		sim->dongles[i].id = i;
 		sim->dongles[i].available_at = 0;
 		sim->coders[i].id = i + 1;
 		sim->coders[i].compiles_done = 0;
 		sim->coders[i].sim = sim;
-		sim->coders[i].left_dongle = &sim->dongles[i];
-		sim->coders[i].right_dongle = &sim->dongles[(i + 1) % sim->num_coders];
+		sim->coders[i].is_finished = 0;
+		sim->coders[i].owns_hardware = 0;
+		sim->coders[i].last_compile_start = 0;
+		sim->coders[i].deadline = 0;
+		sim->coders[i].left_dongle = sim->dongles + i;
+		sim->coders[i].right_dongle = sim->dongles + ((i + 1) % sim->num_coders);
 		i++;
 	}
 	return (0);
@@ -57,7 +66,7 @@ int	validat_args(int argc, char **argv)
 	return (0);
 }
 
-int	parse_args(int argc, char **argv, t_sim *sim)
+int	parse_args(t_sim *sim, int argc, char **argv)
 {
 	sim->coders = NULL;
 	sim->dongles = NULL;
@@ -75,9 +84,7 @@ int	parse_args(int argc, char **argv, t_sim *sim)
 		sim->scheduler_type = 0;
 	sim->is_active = 1;
 	sim->threads_ready = 0;
-	sim->queue = NULL;
 	pthread_cond_init(&sim->start_cond, NULL);
-	pthread_mutex_init(&sim->state_mutex, NULL);
 	pthread_mutex_init(&sim->write_mutex, NULL);
 	if (init_simulation(sim))
 		return (2);

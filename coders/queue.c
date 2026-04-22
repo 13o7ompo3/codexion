@@ -1,66 +1,159 @@
 #include "codexion.h"
 
-long long get_deadline(t_coder *coder)
+// queue_utils.c
+
+int compare_edf(t_coder *a, t_coder *b)
 {
-	return (coder->last_compile_start + coder->sim->time_to_burnout);
+    if (a->deadline < b->deadline)
+        return (1);
+    if (a->deadline > b->deadline)
+        return (0);
+    // Tie breaker
+    if (a->compiles_done < b->compiles_done)
+        return (1);
+    if (a->compiles_done > b->compiles_done)
+        return (0);
+    if (a->id % 2 != 0 && b->id % 2 == 0)
+        return (1);
+    return (0);
 }
 
-void enqueue(t_sim *sim, t_coder *new_coder, int scheduler_type)
+int compare_fifo(t_coder *a, t_coder *b)
 {
-	t_coder		*curr;
-	long long	d_new;
-	long long	d_curr;
+    if (a->deadline < b->deadline)
+        return (1);
+    if (a->deadline > b->deadline)
+        return (0);
+    if (a->compiles_done < b->compiles_done)
+        return (1);
+    if (a->compiles_done > b->compiles_done)
+        return (0);
+    // Tie breaker
+    if (a->id % 2 != 0 && b->id % 2 == 0)
+        return (1);
+    return (0);
+}
 
-	if (!sim->queue)
+int	compare_sleep(t_coder *a, t_coder *b)
+{
+	if (a->wake_up_time < b->wake_up_time)
+		return (1);
+	if (a->wake_up_time > b->wake_up_time)
+		return (0);
+	return (0);
+}
+
+static void	swap_coders(t_coder **a, t_coder **b)
+{
+	t_coder	*tmp;
+
+	tmp = *a;
+	*a = *b;
+	*b = tmp;
+}
+
+static void	heapify_up(t_heap *heap, int idx)
+{
+	int	parent;
+
+	while (idx > 0)
 	{
-		sim->queue = new_coder;
-		new_coder->next = new_coder;
-		new_coder->prev = new_coder;
-		return ;
-	}
-	curr = sim->queue;
-	if (scheduler_type == 1)
-	{
-			d_new = get_deadline(new_coder);
-			do {
-				d_curr = get_deadline(curr);
-
-				if (d_new < d_curr)
-					break ;
-
-				if (d_new == d_curr && new_coder->compiles_done < curr->compiles_done)
-					break ;
-					
-				curr = curr->next;
-			} while (curr != sim->queue);
-		}
-		new_coder->next = curr;
-		new_coder->prev = curr->prev;
-		curr->prev->next = new_coder;
-		curr->prev = new_coder;
-		if (scheduler_type == 1 && curr == sim->queue)
+		parent = (idx - 1) / 2;
+		if (heap->compare(heap->array[idx], heap->array[parent]))
 		{
-			d_new = get_deadline(new_coder);
-			d_curr = get_deadline(curr);
-			if (d_new < d_curr || (d_new == d_curr && new_coder->compiles_done < curr->compiles_done))
-				sim->queue = new_coder;
+			swap_coders(&heap->array[idx], &heap->array[parent]);
+			idx = parent;
 		}
+		else
+			break ;
 	}
-
-void	remove_coder(t_sim *sim, t_coder *coder)
-{
-	if (!coder->next || !coder->prev)
-		return;
-	if (coder->next == coder)
-		sim->queue = NULL;
-	else
-	{
-		coder->prev->next = coder->next;
-		coder->next->prev = coder->prev;
-		if (sim->queue == coder)
-			sim->queue = coder->next;
-	}
-	coder->next = NULL;
-	coder->prev = NULL;
 }
 
+void	heap_insert(t_heap *heap, t_coder *coder)
+{
+	if (heap->size >= heap->capacity)
+		return ;
+	heap->array[heap->size] = coder;
+	heapify_up(heap, heap->size);
+	heap->size++;
+}
+
+static void	heapify_down(t_heap *heap, int idx)
+{
+	int	left;
+	int	right;
+	int	best;
+
+	while (1)
+	{
+		left = 2 * idx + 1;
+		right = 2 * idx + 2;
+		best = idx;
+		if (left < heap->size
+			&& heap->compare(heap->array[left], heap->array[best]))
+			best = left;
+		if (right < heap->size
+			&& heap->compare(heap->array[right], heap->array[best]))
+			best = right;
+		if (best != idx)
+		{
+			swap_coders(&heap->array[idx], &heap->array[best]);
+			idx = best;
+		}
+		else
+			break ;
+	}
+}
+
+void	heap_remove_at(t_heap *heap, int idx)
+{
+	int	parent;
+
+	if (idx < 0 || idx >= heap->size)
+		return ;
+	heap->size--;
+	if (idx == heap->size)
+		return ; // We just removed the last element, no sorting needed
+
+	heap->array[idx] = heap->array[heap->size];
+	parent = (idx - 1) / 2;
+
+	if (idx > 0 && heap->compare(heap->array[idx], heap->array[parent]))
+		heapify_up(heap, idx);
+	else
+		heapify_down(heap, idx);
+}
+
+t_heap	*init_heap(int capacity, int scheduler_type)
+{
+	t_heap	*heap;
+
+	heap = malloc(sizeof(t_heap));
+	if (!heap)
+		return (NULL);
+	heap->array = calloc(capacity, sizeof(t_coder *));
+	if (!heap->array)
+	{
+		free(heap);
+		return (NULL);
+	}
+	heap->size = 0;
+	heap->capacity = capacity;
+
+	if (scheduler_type == 0) // EDF
+		heap->compare = compare_edf;
+	else if (scheduler_type == 1) // FIFO
+		heap->compare = compare_fifo;
+	else				// Sleep Room
+		heap->compare = compare_sleep;
+	
+	return (heap);
+}
+
+void	free_heap(t_heap *heap)
+{
+	free(heap->array);
+	heap->array = NULL;
+	free(heap);
+	heap = NULL;
+}

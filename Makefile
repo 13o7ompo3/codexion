@@ -1,14 +1,16 @@
 NAME		= codexion
 
 CC			= cc
-CFLAGS		= -Wall -Wextra -Werror -pthread #-fsanitize=thread
+CFLAGS		= -Wall -Wextra -Werror -pthread #-fsanitize=thread #-fsanitize=address
 RM			= rm -f
 
 SRCS		= coders/main.c \
 				coders/parser.c \
 				coders/utils.c \
 				coders/queue.c \
-				coders/coder.c 
+				coders/coder.c \
+				coders/the_master.c \
+				coders/sleep_room.c
 
 OBJS		= $(SRCS:.c=.o)
 HEADER		= coders/codexion.h

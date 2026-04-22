@@ -1,211 +1,132 @@
 #include "codexion.h"
 #include <unistd.h>
 
-void	precise_sleep(long long time_in_ms, t_sim *sim)
+static int	is_sim_active(t_sim *sim)
 {
-	long long start_time;
-	long long current_time;
+	int	active;
 
-	start_time = get_current_time_ms();
-	while (1)
-	{
-		pthread_mutex_lock(&sim->state_mutex);
-		if (!sim->is_active)
-		{
-			pthread_mutex_unlock(&sim->state_mutex);
-			break ;
-		}
-		pthread_mutex_unlock(&sim->state_mutex);
-
-		current_time = get_current_time_ms();
-		if ((current_time - start_time) >= time_in_ms)
-			break ;
-	}
+	pthread_mutex_lock(&sim->queue_mutex);
+	active = sim->is_active;
+	pthread_mutex_unlock(&sim->queue_mutex);
+	return (active);
 }
 
-static int cleanup_and_abort(t_sim *sim, t_coder *coder)
-{
-	remove_coder(sim, coder);
-	pthread_mutex_unlock(&sim->state_mutex);
-	return (1);
-}
+// void	precise_sleep(long long time_in_ms, t_sim *sim)
+// {
+// 	long long	start;
 
-static int	finish_take_dongles(t_coder *coder)
-{
-	remove_coder(coder->sim, coder);
-	coder->last_compile_start = get_current_time_ms();
-	coder->compiles_done++;
-	pthread_mutex_unlock(&coder->sim->state_mutex);
-	return (0);
-}
+// 	start = get_current_time_ms();
+// 	while (is_sim_active(sim))
+// 	{
+// 		if (get_current_time_ms() - start >= time_in_ms)
+// 			break ;
+// 		usleep(500);
+// 	}
+// }
 
-static void handle_cooldown_sleep(t_sim *sim)
-{
-	pthread_mutex_unlock(&sim->state_mutex);
-	usleep(500);
-	pthread_mutex_lock(&sim->state_mutex);
-}
-
-static int check_conflict(t_coder *coder)
-{
-	t_coder		*curr;
-	long long	my_dl;
-	long long	curr_dl;
-
-	curr = coder->sim->queue;
-	my_dl = get_deadline(coder);
-	while (curr && curr != coder)
-	{
-		if (curr->left_dongle == coder->left_dongle || 
-			curr->left_dongle == coder->right_dongle ||
-			curr->right_dongle == coder->left_dongle ||
-			curr->right_dongle == coder->right_dongle)
-		{
-			if (!coder->sim->scheduler_type)
-				return (1);
-			curr_dl = get_deadline(curr);
-			if (curr_dl < my_dl || (curr_dl == my_dl && 
-				curr->compiles_done < coder->compiles_done))
-				return (1);
-		}
-		curr = curr->next;
-	}
-	return (0);
-}
-
-static int try_grab_dongles(t_coder *coder)
-{
-	t_dongle    *first;
-	t_dongle    *second;
-	long long   now;
-
-	first = coder->left_dongle < coder->right_dongle ? 
-			coder->left_dongle : coder->right_dongle;
-	second = coder->left_dongle < coder->right_dongle ? 
-			coder->right_dongle : coder->left_dongle;
-	pthread_mutex_lock(&first->mutex);
-	pthread_mutex_lock(&second->mutex);
-	if (!first->is_held && !second->is_held)
-	{
-		now = get_current_time_ms();
-		if (now >= first->available_at && now >= second->available_at)
-		{
-			first->is_held = 1;
-			second->is_held = 1;
-			pthread_mutex_unlock(&second->mutex);
-			pthread_mutex_unlock(&first->mutex);
-			return (0);
-		}
-		pthread_mutex_unlock(&second->mutex);
-		pthread_mutex_unlock(&first->mutex);
-		return (1);
-	}
-	pthread_mutex_unlock(&second->mutex);
-	pthread_mutex_unlock(&first->mutex);
-	return (2);
-}
+// void precise_sleep(long long time_in_ms, t_coder *coder)
+// {
+// 	pthread_mutex_lock(&coder->coder_mutex);
+// 	pthread_cond_timedwait(&coder->wakeup_cond, &coder->coder_mutex, &(struct timespec){
+// 		.tv_sec = time_in_ms / 1000,
+// 		.tv_nsec = (time_in_ms % 1000) * 1000000
+// 	});
+// 	pthread_mutex_unlock(&coder->coder_mutex);
+// 	return;
+// }
 
 int	take_both_dongles(t_coder *coder)
 {
-	int     st;
+	pthread_mutex_lock(&coder->sim->queue_mutex);
 
-	pthread_mutex_lock(&coder->sim->state_mutex);
-	enqueue(coder->sim, coder, coder->sim->scheduler_type);
-	while (1)
-	{
-		if (!coder->sim->is_active)
-			return (cleanup_and_abort(coder->sim, coder));
-		if (!check_conflict(coder))
-		{
-			st = try_grab_dongles(coder);
-			if (st == 0)
-				break ;
-			if (st == 1)
-			{
-				handle_cooldown_sleep(coder->sim);
-				continue ;
-			}
-		}
-		pthread_cond_wait(&coder->wakeup_cond, &coder->sim->state_mutex);
-	}
-	return (finish_take_dongles(coder));
+
+	pthread_mutex_lock(&coder->coder_mutex);
+	if (coder->sim->scheduler_type == 0)
+		coder->deadline = coder->last_compile_start + coder->sim->time_to_burnout;
+	else
+		coder->deadline = get_current_time_ms();
+	pthread_mutex_unlock(&coder->coder_mutex);
+	debug_log(coder->sim, "joining queue. Deadline:", coder->id, coder->deadline, coder->compiles_done);
+
+	heap_insert(coder->sim->queue, coder);
+
+	pthread_cond_broadcast(&coder->sim->waiter_cond);
+
+	while (coder->sim->is_active && !coder->owns_hardware)
+		pthread_cond_wait(&coder->wakeup_cond, &coder->sim->queue_mutex);
+
+	pthread_mutex_unlock(&coder->sim->queue_mutex);
+
+	if (!is_sim_active(coder->sim))
+		return (1);
+	return (0);
 }
 
-void release_both_dongles(t_coder *coder)
+void	release_both_dongles(t_coder *coder)
 {
-	long long	current = get_current_time_ms();
-	long long	next_avail = current + coder->sim->dongle_cooldown;
-	int			i;
-	t_dongle	*first = coder->left_dongle < coder->right_dongle ? coder->left_dongle : coder->right_dongle;
-	t_dongle	*second = coder->left_dongle < coder->right_dongle ? coder->right_dongle : coder->left_dongle;
-	
-	pthread_mutex_lock(&first->mutex);
-	pthread_mutex_lock(&second->mutex);
-	
-	first->is_held = 0;
-	first->available_at = next_avail;
-	second->is_held = 0;
-	second->available_at = next_avail;
-	
-	pthread_mutex_unlock(&second->mutex);
-	pthread_mutex_unlock(&first->mutex);
+	long long	now;
 
-	pthread_mutex_lock(&coder->sim->state_mutex);
-	i = (coder->id - 2 + coder->sim->num_coders) % coder->sim->num_coders;
-	pthread_cond_broadcast(&coder->sim->coders[i].wakeup_cond);
-	i = coder->id % coder->sim->num_coders;
-	pthread_cond_broadcast(&coder->sim->coders[i].wakeup_cond);
-	pthread_mutex_unlock(&coder->sim->state_mutex);
+	pthread_mutex_lock(&coder->sim->queue_mutex);
+
+	coder->owns_hardware = 0;
+	now = get_current_time_ms();
+	coder->left_dongle->available_at = now + coder->sim->dongle_cooldown;
+	coder->right_dongle->available_at = coder->left_dongle->available_at;
+	
+	// Physically release the hardware
+	coder->left_dongle->in_use = 0;
+	coder->right_dongle->in_use = 0;
+
+	pthread_cond_broadcast(&coder->sim->waiter_cond);
+
+	pthread_mutex_unlock(&coder->sim->queue_mutex);
 }
 
 void	*coder_routine(void *arg)
 {
-	t_coder		*coder = (t_coder *)arg;
-	t_sim		*sim = coder->sim;
+	t_coder	*coder = (t_coder *)arg;
+	t_sim	*sim = coder->sim;
 
-	pthread_mutex_lock(&sim->state_mutex);
+	pthread_mutex_lock(&sim->queue_mutex);
 	while (sim->threads_ready == 0)
-		pthread_cond_wait(&sim->start_cond, &sim->state_mutex);
-	pthread_mutex_unlock(&sim->state_mutex);
+		pthread_cond_wait(&sim->start_cond, &sim->queue_mutex);
+	pthread_mutex_lock(&coder->coder_mutex);
+
+	coder->last_compile_start = sim->start_time;
+	pthread_mutex_unlock(&coder->coder_mutex);
+	pthread_mutex_unlock(&sim->queue_mutex);
 
 	if (sim->num_coders == 1)
 	{
-		precise_sleep(sim->time_to_burnout + 10, sim); 
+		print_action(coder, "has taken a dongle");
+		request_sleep(coder, sim->time_to_burnout + 10);
 		return (NULL);
 	}
-
 	if (coder->id % 2 == 0)
-		usleep(1000);
-	while (1)
-	{
-		pthread_mutex_lock(&sim->state_mutex);
-		if (!sim->is_active)
-		{
-			pthread_mutex_unlock(&sim->state_mutex);
-			break ;
-		}
-		pthread_mutex_unlock(&sim->state_mutex);
+		request_sleep(coder, (sim->time_to_compile + sim->time_to_debug + sim->time_to_refactor + sim->dongle_cooldown) / 2);
 
-		if (take_both_dongles(coder) != 0) break;
+	while (is_sim_active(sim))
+	{
+		if (take_both_dongles(coder) != 0)
+			break;
+
+		pthread_mutex_lock(&coder->coder_mutex);
+		coder->last_compile_start = get_current_time_ms();
+		coder->compiles_done++;
+		pthread_mutex_unlock(&coder->coder_mutex);
 
 		print_compiling_sequence(coder);
-		precise_sleep(sim->time_to_compile, sim);
+		request_sleep(coder, sim->time_to_compile);
 
 		release_both_dongles(coder);
-		pthread_mutex_lock(&sim->state_mutex);
         if (sim->required_compiles != -1 && coder->compiles_done >= sim->required_compiles)
-		{
-			pthread_mutex_unlock(&sim->state_mutex);
             break;
-		}
-        pthread_mutex_unlock(&sim->state_mutex);
 
 		print_action(coder, "is debugging");
-		precise_sleep(sim->time_to_debug, sim);
+		request_sleep(coder, sim->time_to_debug);
 
 		print_action(coder, "is refactoring");
-		precise_sleep(sim->time_to_refactor, sim);
+		request_sleep(coder, sim->time_to_refactor);
 	}
 	return (NULL);
 }
-
