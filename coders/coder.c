@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   coder.c                                            :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: obahya <obahya@student.42.fr>              +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/04/24 18:47:00 by obahya            #+#    #+#             */
+/*   Updated: 2026/04/24 18:55:01 by obahya           ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include "codexion.h"
 #include <unistd.h>
 
@@ -11,34 +23,9 @@ static int	is_sim_active(t_sim *sim)
 	return (active);
 }
 
-// void	precise_sleep(long long time_in_ms, t_sim *sim)
-// {
-// 	long long	start;
-
-// 	start = get_current_time_ms();
-// 	while (is_sim_active(sim))
-// 	{
-// 		if (get_current_time_ms() - start >= time_in_ms)
-// 			break ;
-// 		usleep(500);
-// 	}
-// }
-
-// void precise_sleep(long long time_in_ms, t_coder *coder)
-// {
-// 	pthread_mutex_lock(&coder->coder_mutex);
-// 	pthread_cond_timedwait(&coder->wakeup_cond, &coder->coder_mutex, &(struct timespec){
-// 		.tv_sec = time_in_ms / 1000,
-// 		.tv_nsec = (time_in_ms % 1000) * 1000000
-// 	});
-// 	pthread_mutex_unlock(&coder->coder_mutex);
-// 	return;
-// }
-
 int	take_both_dongles(t_coder *coder)
 {
 	pthread_mutex_lock(&coder->sim->queue_mutex);
-
 
 	pthread_mutex_lock(&coder->coder_mutex);
 	if (coder->sim->scheduler_type == 0)
@@ -48,12 +35,15 @@ int	take_both_dongles(t_coder *coder)
 	pthread_mutex_unlock(&coder->coder_mutex);
 	debug_log(coder->sim, "joining queue. Deadline:", coder->id, coder->deadline, coder->compiles_done);
 
-	heap_insert(coder->sim->queue, coder);
+	if (coder->sim->scheduler_type == 0)
+		coder->sim->queue = append_node(coder->sim->queue, &coder->node, compare_edf);
+	else
+		coder->sim->queue = append_node(coder->sim->queue, &coder->node, compare_fifo);
 
 	pthread_cond_broadcast(&coder->sim->waiter_cond);
 
 	while (coder->sim->is_active && !coder->owns_hardware)
-		pthread_cond_wait(&coder->wakeup_cond, &coder->sim->queue_mutex);
+		pthread_cond_wait(&coder->queue_cond, &coder->sim->queue_mutex);
 
 	pthread_mutex_unlock(&coder->sim->queue_mutex);
 

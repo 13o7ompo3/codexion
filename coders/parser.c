@@ -1,16 +1,29 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   parser.c                                           :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: obahya <obahya@student.42.fr>              +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/04/24 18:43:26 by obahya            #+#    #+#             */
+/*   Updated: 2026/04/24 18:54:43 by obahya           ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include "codexion.h"
 #include <stdlib.h>
 #include <string.h>
 
 int	init_simulation(t_sim *sim)
+static void	init_each_coder(t_sim *sim)
 {
 	int	i;
 
 	sim->dongles = calloc(sim->num_coders, sizeof(t_dongle));
 	sim->coders = calloc(sim->num_coders, sizeof(t_coder));
-	sim->queue = init_heap(sim->num_coders, sim->scheduler_type);
+	sim->queue = NULL;
 	sim->sleep_heap = init_heap(sim->num_coders, 1337);
-	if (!sim->dongles || !sim->coders || !sim->queue || !sim->sleep_heap)
+	if (!sim->dongles || !sim->coders || !sim->sleep_heap)
 		return (1);
 	pthread_mutex_init(&sim->queue_mutex, NULL);
 	pthread_cond_init(&sim->waiter_cond, NULL);
@@ -20,7 +33,8 @@ int	init_simulation(t_sim *sim)
 	while (i < sim->num_coders)
 	{
 		pthread_mutex_init(&sim->coders[i].coder_mutex, NULL);
-		pthread_cond_init(&sim->coders[i].wakeup_cond, NULL);
+		pthread_cond_init(&sim->coders[i].queue_cond, NULL);
+		pthread_cond_init(&sim->coders[i].sleep_cond, NULL);
 		sim->dongles[i].id = i;
 		sim->dongles[i].available_at = 0;
 		sim->coders[i].id = i + 1;
@@ -32,7 +46,47 @@ int	init_simulation(t_sim *sim)
 		sim->coders[i].deadline = 0;
 		sim->coders[i].left_dongle = sim->dongles + i;
 		sim->coders[i].right_dongle = sim->dongles + ((i + 1) % sim->num_coders);
+		sim->coders[i].right_dongle = sim->dongles
+			+ ((i + 1) % sim->num_coders);
+		sim->coders[i].node.coder = &sim->coders[i];
 		i++;
+	}
+}
+
+int	init_simulation(t_sim *sim)
+{
+	int	i;
+
+	sim->dongles = calloc(sim->num_coders, sizeof(t_dongle));
+	sim->coders = calloc(sim->num_coders, sizeof(t_coder));
+	sim->queue = NULL;
+	sim->sleep_heap = init_heap(sim->num_coders, 1337);
+	if (!sim->dongles || !sim->coders || !sim->sleep_heap)
+		return (1);
+	pthread_mutex_init(&sim->queue_mutex, NULL);
+	pthread_cond_init(&sim->waiter_cond, NULL);
+	pthread_mutex_init(&sim->sleep_mutex, NULL);
+	pthread_cond_init(&sim->sleep_room_cond, NULL);
+	init_each_coder(sim);
+	return (0);
+}
+
+static int	is_valid_number(char *str)
+{
+	int	j;
+
+	if ((strlen(str) > 10 + (str[0] == '+'))
+		|| ((strlen(str) == 10 + (str[0] == '+'))
+			&& str[(str[0] == '+')] > '2') || (atoi(str) < 0))
+		return (1);
+	j = 0;
+	if (str[j] == '+')
+		j++;
+	while (str[j])
+	{
+		if (str[j] < '0' || str[j] > '9')
+			return (1);
+		j++;
 	}
 	return (0);
 }
@@ -51,6 +105,7 @@ int	validat_args(int argc, char **argv)
 		((strlen(argv[i]) == 10 + (argv[i][0] == '+'))
 			&& argv[i][(argv[i][0] == '+')] > '2') ||
 		(atoi(argv[i]) < 0))
+		if (is_valid_number(argv[i]))
 			return (1);
 		j = 0;
 		if (argv[i][j] == '+')

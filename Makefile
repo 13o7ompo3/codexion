@@ -10,7 +10,8 @@ SRCS		= coders/main.c \
 				coders/queue.c \
 				coders/coder.c \
 				coders/the_master.c \
-				coders/sleep_room.c
+				coders/sleep_room.c \
+				coders/heap.c
 
 OBJS		= $(SRCS:.c=.o)
 HEADER		= coders/codexion.h

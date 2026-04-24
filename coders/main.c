@@ -6,7 +6,7 @@
 /*   By: obahya <obahya@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 02:36:45 by obahya            #+#    #+#             */
-/*   Updated: 2026/04/21 16:12:26 by obahya           ###   ########.fr       */
+/*   Updated: 2026/04/24 17:08:37 by obahya           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -28,7 +28,8 @@ void	pull_the_fire_alarm(t_sim *sim)
 	i = 0;
 	while (i < sim->num_coders)
 	{
-		pthread_cond_broadcast(&sim->coders[i].wakeup_cond);
+		pthread_cond_broadcast(&sim->coders[i].queue_cond);
+		pthread_cond_broadcast(&sim->coders[i].sleep_cond);
 		i++;
 	}
 	pthread_mutex_unlock(&sim->write_mutex);
@@ -133,7 +134,8 @@ void cleanup_simulation(t_sim *sim)
 		i = 0;
 		while (i < sim->num_coders)
 		{
-			pthread_cond_destroy(&sim->coders[i].wakeup_cond);
+			pthread_cond_destroy(&sim->coders[i].queue_cond);
+			pthread_cond_destroy(&sim->coders[i].sleep_cond);
 			pthread_mutex_destroy(&sim->coders[i].coder_mutex);
 			i++;
 		}
@@ -147,8 +149,6 @@ void cleanup_simulation(t_sim *sim)
 	pthread_cond_destroy(&sim->sleep_room_cond);
 	if (sim->dongles)
 		free(sim->dongles);
-	if (sim->queue)
-		free_heap(sim->queue);
 	if (sim->sleep_heap)
 		free_heap(sim->sleep_heap);
 }

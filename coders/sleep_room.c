@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   sleep_room.c                                       :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: obahya <obahya@student.42.fr>              +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/04/24 18:43:44 by obahya            #+#    #+#             */
+/*   Updated: 2026/04/24 18:43:45 by obahya           ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include "codexion.h"
 
 void	request_sleep(t_coder *coder, long long duration_ms)
@@ -17,7 +29,7 @@ void	request_sleep(t_coder *coder, long long duration_ms)
 	pthread_cond_signal(&coder->sim->sleep_room_cond);
 	// 4. Wait for the Sleep Room to page us when our time is up
 	while (coder->sim->is_active && coder->is_sleeping)
-		pthread_cond_wait(&coder->wakeup_cond, &coder->sim->sleep_mutex);	
+		pthread_cond_wait(&coder->sleep_cond, &coder->sim->sleep_mutex);	
 	pthread_mutex_unlock(&coder->sim->sleep_mutex);
 }
 
@@ -34,7 +46,7 @@ static int	process_awakenings(t_sim *sim, long long now)
 			break; // if the first one isn't ready, nobody is ready.
 		heap_remove_at(sim->sleep_heap, 0);
 		top->is_sleeping = 0;
-		pthread_cond_broadcast(&top->wakeup_cond);
+		pthread_cond_broadcast(&top->sleep_cond);
 		woke_someone = 1;
 	}
 	return (woke_someone);

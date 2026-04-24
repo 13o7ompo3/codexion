@@ -1,94 +1,113 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   the_master.c                                       :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: obahya <obahya@student.42.fr>              +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/04/24 18:43:51 by obahya            #+#    #+#             */
+/*   Updated: 2026/04/24 18:43:52 by obahya           ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include "codexion.h"
 #include <string.h>
 
-static int	try_wake_coder(t_sim *sim, int i, long long now)
-static int	try_wake_coder(t_sim *sim, int i, long long now, int *reserved)
+static int	try_wake_coder(t_sim *sim, t_node *node, long long now)
 {
-	t_coder	*coder;
-	int		left_avail;
-	int		right_avail;
+	t_coder	*coder = node->coder;
+	long long	max_avail;
 
-	coder = sim->queue->array[i];
-	debug_log(sim, "Waiter checking heap index", i, coder->left_dongle->available_at, now);
-	if (coder->left_dongle->available_at <= now && !coder->left_dongle->in_use
-		&& coder->right_dongle->available_at <= now && !coder->right_dongle->in_use)
-	left_avail = (coder->left_dongle->available_at <= now && !coder->left_dongle->in_use);
-	right_avail = (coder->right_dongle->available_at <= now && !coder->right_dongle->in_use);
-	if (left_avail && right_avail)
+	if (!coder->left_dongle->reserved && !coder->right_dongle->reserved)
 	{
-		debug_log(sim, "WAITER APPROVED", coder->id, 0, 0);
+		coder->left_dongle->reserved = coder->id;
+		coder->right_dongle->reserved = coder->id;
+	}
+	else if (coder->left_dongle->reserved != coder->id
+		|| coder->right_dongle->reserved != coder->id)
+		return (-1);
+	if (coder->left_dongle->in_use || coder->right_dongle->in_use)
+		return (-1);
+
+	if (coder->left_dongle->available_at <= now
+		&& coder->right_dongle->available_at <= now)
+	{
+		remove_node(&sim->queue, node);
+		coder->owns_hardware = 1;
 		coder->left_dongle->in_use = 1;
 		coder->right_dongle->in_use = 1;
-		heap_remove_at(sim->queue, i);
-		coder->owns_hardware = 1;
-		pthread_cond_broadcast(&coder->wakeup_cond);
-		// coder->left_dongle->available_at = now + coder->sim->dongle_cooldown + coder->sim->time_to_compile;
-		// coder->right_dongle->available_at = coder->left_dongle->available_at;
-		
-		return (1);
-		if (!reserved[coder->left_dongle->id] && !reserved[coder->right_dongle->id])
-		{
-			coder->left_dongle->in_use = 1;
-			coder->right_dongle->in_use = 1;
-			heap_remove_at(sim->queue, i);
-			coder->owns_hardware = 1;
-			pthread_cond_broadcast(&coder->wakeup_cond);
-			return (1);
-		}
+		coder->left_dongle->reserved = 0;
+		coder->right_dongle->reserved = 0;
+		pthread_cond_signal(&coder->queue_cond);
+		return (0);
 	}
-	else
-	{
-		reserved[coder->left_dongle->id] = 1;
-		reserved[coder->right_dongle->id] = 1;
-	}
-	return (0);
+	max_avail = coder->left_dongle->available_at;
+	if (coder->right_dongle->available_at > max_avail)
+		max_avail = coder->right_dongle->available_at;
+	return (max_avail - now);
 }
 
 void	*waiter_routine(void *arg)
 {
 	t_sim		*sim = (t_sim *)arg;
-	int			woke_someone;
-	int			i;
+	t_node		*current;
+	int			ret;
 	long long	frozen_now;
-	int			*reserved;
-
-	reserved = calloc(sim->num_coders, sizeof(int));
-	if (!reserved)
-		return (NULL);
+	long long	min_wait;
+	int			somebody_woke;
+	int			i;
 
 	pthread_mutex_lock(&sim->queue_mutex);
 	while (sim->is_active)
 	{
-		// 1. If the queue is empty, go to sleep until someone rings the bell.
-		if (sim->queue->size == 0)
+		if (!sim->queue)
 		{
 			pthread_cond_wait(&sim->waiter_cond, &sim->queue_mutex);
 			continue;
 		}
-		memset(reserved, 0, sim->num_coders * sizeof(int));
-		i = 0;
-		woke_someone = 0;
+		
+		current = sim->queue;
 		frozen_now = get_current_time_ms();
-		while (i < sim->queue->size)
+		min_wait = -1;
+		somebody_woke = 0;
+
+		i = 0;
+		while (i < sim->num_coders)
 		{
-			/* Process each coder in the queue */
-			if (try_wake_coder(sim, i, frozen_now))
-			if (try_wake_coder(sim, i, frozen_now, reserved))
-			{
-				woke_someone = 1;
-				// i = 1;
-				break;
-			}
+			sim->dongles[i].reserved = 0;
 			i++;
 		}
-		if (!woke_someone)
+
+		do
 		{
-			pthread_mutex_unlock(&sim->queue_mutex);
-			usleep(500); // Prevent 100% CPU spin-locking
-			pthread_mutex_lock(&sim->queue_mutex);
+			ret = try_wake_coder(sim, current, frozen_now);
+			if (ret == 0)
+			{
+				somebody_woke = 1;
+				// break;
+				current = sim->queue;
+				continue;
+			}
+			else if (ret > 0)
+			{
+				if (min_wait == -1 || ret < min_wait)
+					min_wait = ret;
+			}
+			current = current->next;
+		} while (current && current != sim->queue);
+
+		if (somebody_woke)
+			continue;
+
+		if (min_wait == -1)
+			pthread_cond_wait(&sim->waiter_cond, &sim->queue_mutex);
+		else
+		{
+			struct timespec ts;
+			set_timespec_timeout(&ts, min_wait);
+			pthread_cond_timedwait(&sim->waiter_cond, &sim->queue_mutex, &ts);
 		}
 	}
 	pthread_mutex_unlock(&sim->queue_mutex);
-	free(reserved);
 	return (NULL);
 }

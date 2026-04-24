@@ -1,3 +1,15 @@
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   utils.c                                            :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: obahya <obahya@student.42.fr>              +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/04/24 18:44:02 by obahya            #+#    #+#             */
+/*   Updated: 2026/04/24 18:44:03 by obahya           ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
+
 #include "codexion.h"
 #include <stdio.h>
 #include <sys/time.h>
@@ -51,7 +63,8 @@ void	wake_up_coders(t_sim *sim)
 	i = 0;
 	while (i < sim->num_coders)
 	{
-		pthread_cond_signal(&sim->coders[i].wakeup_cond);
+		pthread_cond_broadcast(&sim->coders[i].queue_cond);
+		pthread_cond_broadcast(&sim->coders[i].sleep_cond);
 		i++;
 	}
 }

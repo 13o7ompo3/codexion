@@ -6,7 +6,7 @@
 /*   By: obahya <obahya@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 02:39:16 by obahya            #+#    #+#             */
-/*   Updated: 2026/04/21 18:15:40 by obahya           ###   ########.fr       */
+/*   Updated: 2026/04/24 18:23:47 by obahya           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -20,14 +20,22 @@
 # include <stdlib.h>
 # include <unistd.h>
 
+typedef struct s_coder t_coder;
 
 typedef struct s_dongle
 {
 	int				id;
 	long long		available_at;
 	int				in_use;
+	int				reserved; // Coder ID that has reserved this dongle (for the waiter)
 }	t_dongle;
 
+typedef struct s_node
+{
+	t_coder			*coder;
+	struct s_node	*next;
+	struct s_node	*prev;
+}	t_node;
 
 typedef struct s_coder
 {
@@ -43,9 +51,11 @@ typedef struct s_coder
 	t_dongle		*left_dongle;
 	t_dongle		*right_dongle;
 
-	pthread_cond_t	wakeup_cond;
+	pthread_cond_t	queue_cond;
+	pthread_cond_t	sleep_cond;
 
 	struct s_sim	*sim;
+	struct s_node	node;
 	pthread_t		thread_id;
 	pthread_mutex_t	coder_mutex;
 }	t_coder;
@@ -76,7 +86,7 @@ typedef struct s_sim
 
 	t_coder			*coders;
 	t_dongle		*dongles;
-	t_heap			*queue;
+	t_node			*queue;
 	t_heap			*sleep_heap;
 
 	pthread_mutex_t	write_mutex;
@@ -113,18 +123,27 @@ void		print_action(t_coder *coder, char *action);
 /* Waiter */
 void		*waiter_routine(void *arg);
 
-/* Heap (queue.c) */
+/* Heap (heap.c) */
 void		heap_insert(t_heap *heap, t_coder *coder);
 void		heap_remove_at(t_heap *heap, int idx);
 t_heap		*init_heap(int capacity, int scheduler_type);
 void		free_heap(t_heap *heap);
+int			compare_fifo(t_coder *a, t_coder *b);
+int			compare_edf(t_coder *a, t_coder *b);
+
+
+/* Queue (queue.c) */
+t_node		*create_node(t_coder *coder);
+t_node		*append_node(t_node *head, t_node *new_node, int (*compare)(t_coder *, t_coder *));
+t_node		*remove_node(t_node **head, t_node *node);
 
 /* Sleep Room (sleep_room.c) */
 void		*sleep_room_routine(void *arg);
 void		request_sleep(t_coder *coder, long long duration_ms);
+void	set_timespec_timeout(struct timespec *ts, long long delay_in_ms);
 
-void	wake_up_coders(t_sim *sim);
-void print_compiling_sequence(t_coder *coder);
-void	debug_log(t_sim *sim, char *action, int id, long long val1, long long val2);
+void		wake_up_coders(t_sim *sim);
+void		print_compiling_sequence(t_coder *coder);
+void		debug_log(t_sim *sim, char *action, int id, long long val1, long long val2);
 
 #endif
