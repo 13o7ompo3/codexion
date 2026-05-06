@@ -6,107 +6,85 @@
 /*   By: obahya <obahya@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/24 18:43:51 by obahya            #+#    #+#             */
-/*   Updated: 2026/04/24 18:43:52 by obahya           ###   ########.fr       */
+/*   Updated: 2026/05/05 15:28:20 by obahya           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "codexion.h"
 #include <string.h>
 
-static int	try_wake_coder(t_sim *sim, t_node *node, long long now)
+static void	reset_reservations(t_sim *sim)
 {
-	t_coder	*coder = node->coder;
-	long long	max_avail;
+	int	i;
 
-	if (!coder->left_dongle->reserved && !coder->right_dongle->reserved)
+	i = 0;
+	while (i < sim->num_coders)
 	{
-		coder->left_dongle->reserved = coder->id;
-		coder->right_dongle->reserved = coder->id;
+		sim->dongles[i].reserved = 0;
+		i++;
 	}
-	else if (coder->left_dongle->reserved != coder->id
-		|| coder->right_dongle->reserved != coder->id)
-		return (-1);
-	if (coder->left_dongle->in_use || coder->right_dongle->in_use)
-		return (-1);
+}
 
-	if (coder->left_dongle->available_at <= now
-		&& coder->right_dongle->available_at <= now)
-	{
-		remove_node(&sim->queue, node);
-		coder->owns_hardware = 1;
-		coder->left_dongle->in_use = 1;
-		coder->right_dongle->in_use = 1;
-		coder->left_dongle->reserved = 0;
-		coder->right_dongle->reserved = 0;
-		pthread_cond_signal(&coder->queue_cond);
+static int	evaluate_coders_in_queue(t_sim *sim, long long now,
+	long long *min_wait)
+{
+	t_node	*current;
+	t_node	*start_node;
+
+	reset_reservations(sim);
+	current = sim->queue;
+	if (!current)
 		return (0);
+	*min_wait = -1;
+	start_node = current;
+	while (1)
+	{
+		if (process_queue_node(sim, current, now, min_wait))
+			return (1);
+		current = current->next;
+		if (current == start_node)
+			break ;
 	}
-	max_avail = coder->left_dongle->available_at;
-	if (coder->right_dongle->available_at > max_avail)
-		max_avail = coder->right_dongle->available_at;
-	return (max_avail - now);
+	return (0);
+}
+
+static void	wait_for_next_event(t_sim *sim, long long min_wait)
+{
+	struct timespec	ts;
+
+	if (min_wait == -1)
+		pthread_cond_wait(&sim->waiter_cond, &sim->queue_mutex);
+	else if (min_wait > 0)
+	{
+		if (min_wait < 7)
+		{
+			pthread_mutex_unlock(&sim->queue_mutex);
+			usleep(min_wait * 1000);
+			pthread_mutex_lock(&sim->queue_mutex);
+			return ;
+		}
+		set_timespec_timeout(&ts, min_wait);
+		pthread_cond_timedwait(&sim->waiter_cond, &sim->queue_mutex, &ts);
+	}
 }
 
 void	*waiter_routine(void *arg)
 {
-	t_sim		*sim = (t_sim *)arg;
-	t_node		*current;
-	int			ret;
-	long long	frozen_now;
+	t_sim		*sim;
 	long long	min_wait;
-	int			somebody_woke;
-	int			i;
 
+	sim = (t_sim *)arg;
 	pthread_mutex_lock(&sim->queue_mutex);
-	while (sim->is_active)
+	while (is_sim_active(sim))
 	{
 		if (!sim->queue)
 		{
 			pthread_cond_wait(&sim->waiter_cond, &sim->queue_mutex);
-			continue;
+			continue ;
 		}
-		
-		current = sim->queue;
-		frozen_now = get_current_time_ms();
-		min_wait = -1;
-		somebody_woke = 0;
-
-		i = 0;
-		while (i < sim->num_coders)
-		{
-			sim->dongles[i].reserved = 0;
-			i++;
-		}
-
-		do
-		{
-			ret = try_wake_coder(sim, current, frozen_now);
-			if (ret == 0)
-			{
-				somebody_woke = 1;
-				// break;
-				current = sim->queue;
-				continue;
-			}
-			else if (ret > 0)
-			{
-				if (min_wait == -1 || ret < min_wait)
-					min_wait = ret;
-			}
-			current = current->next;
-		} while (current && current != sim->queue);
-
-		if (somebody_woke)
-			continue;
-
-		if (min_wait == -1)
-			pthread_cond_wait(&sim->waiter_cond, &sim->queue_mutex);
-		else
-		{
-			struct timespec ts;
-			set_timespec_timeout(&ts, min_wait);
-			pthread_cond_timedwait(&sim->waiter_cond, &sim->queue_mutex, &ts);
-		}
+		if (evaluate_coders_in_queue(sim, get_current_time_ms(), &min_wait))
+			continue ;
+		wait_for_next_event(sim, min_wait);
 	}
 	pthread_mutex_unlock(&sim->queue_mutex);
 	return (NULL);
