@@ -6,7 +6,7 @@
 /*   By: obahya <obahya@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/24 18:44:02 by obahya            #+#    #+#             */
-/*   Updated: 2026/05/05 15:28:56 by obahya           ###   ########.fr       */
+/*   Updated: 2026/05/08 14:55:57 by obahya           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -55,15 +55,12 @@ void	print_compiling_sequence(t_coder *coder)
 	pthread_mutex_unlock(&coder->sim->write_mutex);
 }
 
-void	wake_up_coders(t_sim *sim)
+int	is_done(t_coder *coder)
 {
-	int	i;
+	int	done;
 
-	i = 0;
-	while (i < sim->num_coders)
-	{
-		pthread_cond_broadcast(&sim->coders[i].queue_cond);
-		pthread_cond_broadcast(&sim->coders[i].sleep_cond);
-		i++;
-	}
+	pthread_mutex_lock(&coder->sim->state_mutex);
+	done = (coder->compiles_done >= coder->sim->required_compiles);
+	pthread_mutex_unlock(&coder->sim->state_mutex);
+	return (done);
 }

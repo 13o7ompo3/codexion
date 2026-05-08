@@ -6,7 +6,7 @@
 /*   By: obahya <obahya@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/24 18:42:56 by obahya            #+#    #+#             */
-/*   Updated: 2026/05/02 11:21:48 by obahya           ###   ########.fr       */
+/*   Updated: 2026/05/06 20:11:16 by obahya           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -53,10 +53,8 @@ t_heap	*init_heap(int capacity, int scheduler_type)
 	}
 	heap->size = 0;
 	heap->capacity = capacity;
-	if (scheduler_type == 0)
-		heap->compare = compare_edf;
-	else if (scheduler_type == 1)
-		heap->compare = compare_fifo;
+	if (scheduler_type == 0 || scheduler_type == 1)
+		heap->compare = compare_deadline;
 	else
 		heap->compare = compare_sleep;
 	return (heap);

@@ -6,7 +6,7 @@
 /*   By: obahya <obahya@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/24 18:43:51 by obahya            #+#    #+#             */
-/*   Updated: 2026/05/05 15:28:20 by obahya           ###   ########.fr       */
+/*   Updated: 2026/05/08 17:27:15 by obahya           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -32,10 +32,10 @@ static int	evaluate_coders_in_queue(t_sim *sim, long long now,
 	t_node	*start_node;
 
 	reset_reservations(sim);
+	*min_wait = -1;
 	current = sim->queue;
 	if (!current)
-		return (0);
-	*min_wait = -1;
+		return (1);
 	start_node = current;
 	while (1)
 	{
@@ -56,13 +56,6 @@ static void	wait_for_next_event(t_sim *sim, long long min_wait)
 		pthread_cond_wait(&sim->waiter_cond, &sim->queue_mutex);
 	else if (min_wait > 0)
 	{
-		if (min_wait < 7)
-		{
-			pthread_mutex_unlock(&sim->queue_mutex);
-			usleep(min_wait * 1000);
-			pthread_mutex_lock(&sim->queue_mutex);
-			return ;
-		}
 		set_timespec_timeout(&ts, min_wait);
 		pthread_cond_timedwait(&sim->waiter_cond, &sim->queue_mutex, &ts);
 	}

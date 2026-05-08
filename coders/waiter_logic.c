@@ -6,7 +6,7 @@
 /*   By: obahya <obahya@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/24 21:20:38 by obahya            #+#    #+#             */
-/*   Updated: 2026/05/01 15:37:59 by obahya           ###   ########.fr       */
+/*   Updated: 2026/05/08 15:49:43 by obahya           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -59,7 +59,8 @@ static int	try_wake_coder(t_sim *sim, t_node *node, long long now)
 	t_coder		*coder;
 
 	coder = node->coder;
-	if (attempt_to_reserve_dongles(coder) != 0)
+	if (is_burnout(coder, now) || is_done(coder)
+		|| attempt_to_reserve_dongles(coder) != 0)
 		return (-1);
 	return (check_and_wake_coder(sim, node, now));
 }

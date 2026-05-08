@@ -6,32 +6,13 @@
 /*   By: obahya <obahya@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/24 21:22:37 by obahya            #+#    #+#             */
-/*   Updated: 2026/04/24 23:06:31 by obahya           ###   ########.fr       */
+/*   Updated: 2026/05/07 09:10:15 by obahya           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "codexion.h"
 
-int	compare_edf(t_coder *a, t_coder *b)
-{
-	if (a->deadline < b->deadline)
-		return (1);
-	if (a->deadline > b->deadline)
-		return (0);
-	if (a->compiles_done < b->compiles_done)
-		return (1);
-	if (a->compiles_done > b->compiles_done)
-		return (0);
-	if (a->id % 2 != 0 && b->id % 2 == 0)
-		return (1);
-	if (a->id % 2 == 0 && b->id % 2 != 0)
-		return (0);
-	if (a->id < b->id)
-		return (1);
-	return (0);
-}
-
-int	compare_fifo(t_coder *a, t_coder *b)
+int	compare_deadline(t_coder *a, t_coder *b)
 {
 	if (a->deadline < b->deadline)
 		return (1);

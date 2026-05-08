@@ -6,7 +6,7 @@
 /*   By: obahya <obahya@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/02/20 02:39:16 by obahya            #+#    #+#             */
-/*   Updated: 2026/05/05 18:57:27 by obahya           ###   ########.fr       */
+/*   Updated: 2026/05/08 17:49:00 by obahya           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -29,7 +29,6 @@ typedef struct s_dongle
 	long long		available_at;
 	int				in_use;
 	int				reserved;
-	char			__cache_padding[44]; /* Forces struct to 64 bytes */
 }	t_dongle;
 
 typedef struct s_node
@@ -44,7 +43,6 @@ typedef struct s_coder
 	int				id;
 	int				compiles_done;
 	long long		last_compile_start;
-	int				is_finished;
 	int				owns_hardware;
 	long long		deadline;
 	long long		wake_up_time;
@@ -60,7 +58,6 @@ typedef struct s_coder
 	struct s_node	node;
 	pthread_t		thread_id;
 	pthread_mutex_t	coder_mutex;
-	char			__cache_padding[64]; /* Prevents coder cache collision */
 }	t_coder;
 
 /* THE HEAP (Priority Queue) */
@@ -105,15 +102,22 @@ typedef struct s_sim
 	pthread_t		waiter_thread;
 	pthread_t		monitor_thread;
 
+	int				coders_remaining;
 	int				main_init_step;
 	int				coders_init_num;
 	int				init_last_coder;
 }	t_sim;
 
-/* Initialization & Cleanup (init.c / main.c) */
+/* Parsing Arguments (parcer.c) */
 int			parse_args(t_sim *sim, int ac, char **av);
+
+/* Initialization (init_simulation.c)*/
 int			init_simulation(t_sim *sim);
+
+/* Starting the Simulation (simulation.c)*/
 int			start_simulation(t_sim *sim);
+
+/* Cleanup (cleanup.c) */
 void		cleanup_simulation(t_sim *sim);
 
 /* The Life Cycle (coder.c) */
@@ -121,10 +125,7 @@ void		*coder_routine(void *arg);
 int			take_both_dongles(t_coder *coder);
 void		release_both_dongles(t_coder *coder);
 int			is_sim_active(t_sim *sim);
-
-/* Time & Precision (time.c) */
-long long	get_current_time_ms(void);
-// void		precise_sleep(long long time_in_ms, t_sim *sim);
+int			all_coders_finished(t_sim *sim);
 
 /* Monitoring & Safety (monitor.c) */
 void		*monitor_routine(void *arg);
@@ -144,8 +145,9 @@ t_heap		*init_heap(int capacity, int scheduler_type);
 void		free_heap(t_heap *heap);
 void		heapify_up(t_heap *heap, int idx);
 void		heapify_down(t_heap *heap, int idx);
-int			compare_fifo(t_coder *a, t_coder *b);
-int			compare_edf(t_coder *a, t_coder *b);
+
+/* Comparison Functions (heap_compare.c) */
+int			compare_deadline(t_coder *a, t_coder *b);
 int			compare_sleep(t_coder *a, t_coder *b);
 
 /* Queue (queue.c) */
@@ -158,8 +160,10 @@ void		*sleep_room_routine(void *arg);
 void		request_sleep(t_coder *coder, long long duration_ms);
 void		set_timespec_timeout(struct timespec *ts, long long delay_in_ms);
 
-void		wake_up_coders(t_sim *sim);
+/* Utility Functions (utils.c) */
 void		print_compiling_sequence(t_coder *coder);
+int			is_done(t_coder *coder);
+long long	get_current_time_ms(void);
 
 /* Memory Allocation (calloc.c) */
 void		*ft_calloc(size_t nmemb, size_t lsize);

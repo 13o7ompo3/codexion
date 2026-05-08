@@ -1,7 +1,7 @@
 NAME		= codexion
 
 CC			= cc
-CFLAGS		= -Wall -Wextra -Werror -g -pthread -fsanitize=thread #-fsanitize=address
+CFLAGS		= -Wall -Wextra -Werror -pthread #-g -fsanitize=thread
 RM			= rm -f
 
 SRCS		= coders/main.c \
@@ -18,6 +18,8 @@ SRCS		= coders/main.c \
 				coders/monitor.c \
 				coders/simulation.c \
 				coders/waiter_logic.c \
+				coders/cleanup.c \
+				coders/init_simulation.c \
 				coders/calloc.c
 
 OBJS		= $(SRCS:.c=.o)
@@ -39,4 +41,4 @@ fclean: clean
 
 re: fclean all
 
-.PHONY: all clean fclean re
+.PHONY: clean

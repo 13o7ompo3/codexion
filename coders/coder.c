@@ -6,7 +6,7 @@
 /*   By: obahya <obahya@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/24 18:47:00 by obahya            #+#    #+#             */
-/*   Updated: 2026/05/05 18:56:14 by obahya           ###   ########.fr       */
+/*   Updated: 2026/05/08 17:27:53 by obahya           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -23,25 +23,35 @@ int	is_sim_active(t_sim *sim)
 	return (active);
 }
 
+int	all_coders_finished(t_sim *sim)
+{
+	int	finished;
+
+	pthread_mutex_lock(&sim->state_mutex);
+	finished = (sim->coders_remaining == 0);
+	pthread_mutex_unlock(&sim->state_mutex);
+	return (finished);
+}
+
 static void	coder_life_cycle(t_coder *coder)
 {
 	t_sim	*sim;
-	int		current_compiles;
 
 	sim = coder->sim;
-	while (is_sim_active(sim))
+	while (is_sim_active(sim) || all_coders_finished(sim))
 	{
-		if (take_both_dongles(coder) != 0 || is_burnout(coder, get_current_time_ms()))
+		if (take_both_dongles(coder) != 0)
 			break ;
 		pthread_mutex_lock(&coder->coder_mutex);
 		coder->compiles_done++;
-		current_compiles = coder->compiles_done;
 		pthread_mutex_unlock(&coder->coder_mutex);
 		print_compiling_sequence(coder);
 		request_sleep(coder, sim->time_to_compile);
+		pthread_mutex_lock(&coder->sim->state_mutex);
+		if (coder->compiles_done == sim->required_compiles)
+			sim->coders_remaining--;
+		pthread_mutex_unlock(&coder->sim->state_mutex);
 		release_both_dongles(coder);
-		if (current_compiles == sim->required_compiles)
-			break ;
 		print_action(coder, "is debugging");
 		request_sleep(coder, sim->time_to_debug);
 		print_action(coder, "is refactoring");
@@ -77,7 +87,7 @@ void	*coder_routine(void *arg)
 	}
 	if (coder->id % 2 == 0 && coder->sim->scheduler_type == 0)
 		request_sleep(coder, (coder->sim->time_to_compile
-				+ coder->sim->dongle_cooldown) / 2);
+				+ coder->sim->dongle_cooldown) / 2 + 2);
 	coder_life_cycle(coder);
 	return (NULL);
 }

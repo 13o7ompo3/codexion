@@ -6,7 +6,7 @@
 /*   By: obahya <obahya@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/24 18:43:44 by obahya            #+#    #+#             */
-/*   Updated: 2026/05/05 18:56:00 by obahya           ###   ########.fr       */
+/*   Updated: 2026/05/08 16:33:11 by obahya           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -81,15 +81,15 @@ static void	sleep_room_wait(t_sim *sim, long long now)
 	time_until_next = sim->sleep_heap->array[0]->wake_up_time - now;
 	if (time_until_next <= 0)
 		return ;
-	if (time_until_next < 5)
+	if (time_until_next < 10)
 	{
 		pthread_mutex_unlock(&sim->sleep_mutex);
-		usleep(time_until_next * 500);
+		usleep(time_until_next << 9);
 		pthread_mutex_lock(&sim->sleep_mutex);
 	}
 	else
 	{
-		set_timespec_timeout(&ts, time_until_next);
+		set_timespec_timeout(&ts, time_until_next - 2);
 		pthread_cond_timedwait(&sim->sleep_room_cond, &sim->sleep_mutex, &ts);
 	}
 }
