@@ -6,7 +6,7 @@
 /*   By: obahya <obahya@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/24 21:08:20 by obahya            #+#    #+#             */
-/*   Updated: 2026/05/08 11:16:14 by obahya           ###   ########.fr       */
+/*   Updated: 2026/05/08 19:55:54 by obahya           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -34,8 +34,10 @@ static int	check_simulation_state(t_sim *sim, long long now)
 	all_compiled = 1;
 	while (i < sim->num_coders)
 	{
-		if (is_burnout(&sim->coders[i], now) && !all_coders_finished(sim))
+		if (is_burnout(&sim->coders[i], now))
 		{
+			if (all_coders_finished(sim))
+				break ;
 			pull_the_fire_alarm(sim);
 			print_action(&sim->coders[i], "burned out");
 			return (1);

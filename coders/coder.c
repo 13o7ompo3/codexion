@@ -6,7 +6,7 @@
 /*   By: obahya <obahya@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/24 18:47:00 by obahya            #+#    #+#             */
-/*   Updated: 2026/05/08 17:27:53 by obahya           ###   ########.fr       */
+/*   Updated: 2026/05/08 19:53:57 by obahya           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -38,7 +38,7 @@ static void	coder_life_cycle(t_coder *coder)
 	t_sim	*sim;
 
 	sim = coder->sim;
-	while (is_sim_active(sim) || all_coders_finished(sim))
+	while (is_sim_active(sim) && !all_coders_finished(sim))
 	{
 		if (take_both_dongles(coder) != 0)
 			break ;

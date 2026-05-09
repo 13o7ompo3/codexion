@@ -6,7 +6,7 @@
 /*   By: obahya <obahya@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/24 18:43:26 by obahya            #+#    #+#             */
-/*   Updated: 2026/05/08 17:38:30 by obahya           ###   ########.fr       */
+/*   Updated: 2026/05/08 20:58:33 by obahya           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -21,7 +21,7 @@ static int	is_valid_number(char *str)
 	if (!str || !str[str[0] == '+'])
 		return (1);
 	j = 0;
-	if (*str == '+' || *str == '-')
+	if (*str == '+')
 		str++;
 	while (*str == '0')
 		str++;
