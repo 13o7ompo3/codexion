@@ -6,7 +6,7 @@
 /*   By: obahya <obahya@student.42.fr>              +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/04/24 21:37:09 by obahya            #+#    #+#             */
-/*   Updated: 2026/05/08 17:48:34 by obahya           ###   ########.fr       */
+/*   Updated: 2026/05/09 15:39:10 by obahya           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -56,6 +56,6 @@ void	release_both_dongles(t_coder *coder)
 	coder->right_dongle->available_at = coder->left_dongle->available_at;
 	coder->left_dongle->in_use = 0;
 	coder->right_dongle->in_use = 0;
-	pthread_mutex_unlock(&coder->sim->queue_mutex);
 	pthread_cond_broadcast(&coder->sim->waiter_cond);
+	pthread_mutex_unlock(&coder->sim->queue_mutex);
 }
